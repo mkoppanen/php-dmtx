@@ -96,7 +96,7 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadstring_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, image_string)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 1)
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, scan_gap)
 	ZEND_ARG_INFO(0, corrections)
 	ZEND_ARG_INFO(0, type)
@@ -172,7 +172,7 @@ PHP_METHOD(dmtxread, __construct)
 	char *filename = NULL;
 	int filename_len = 0;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "|s!", &filename, &filename_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s!", &filename, &filename_len) == FAILURE) {
 		return;
 	}
 
@@ -195,7 +195,7 @@ PHP_METHOD(dmtxread, loadfile)
 	char *filename;
 	int filename_len;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s", &filename, &filename_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &filename, &filename_len) == FAILURE) {
 		return;
 	}
 
@@ -216,7 +216,7 @@ PHP_METHOD(dmtxread, loadstring)
 	char *image_string;
 	int image_string_len;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s", &image_string, &image_string_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &image_string, &image_string_len) == FAILURE) {
 		return;
 	}
 
@@ -307,17 +307,17 @@ static zval *_php_dmtx_region_to_array(DmtxDecode *decode, DmtxRegion *region, i
 }
 /* }}} */
 
-/* {{{ proto array dmtxRead::getInfo(int scan_gap[, int corrections, int type, int timeout_ms])
+/* {{{ proto array dmtxRead::getInfo([int scan_gap, int corrections, int type, int timeout_ms])
 	Fetches the information from the image */
 PHP_METHOD(dmtxread, getinfo)
 {
 	php_dmtx_read_object *intern;
 	DmtxDecode *decode;
-	long scan_gap = 0, i, type = PHP_DMTX_MATRIX;
+	long scan_gap = 1, i, type = PHP_DMTX_MATRIX;
 	long corrections = DmtxUndefined, timeout_ms = DmtxUndefined;
 	DmtxTime timeout;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "l|bll", &scan_gap, &corrections, &type, &timeout_ms) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbll", &scan_gap, &corrections, &type, &timeout_ms) == FAILURE) {
 		return;
 	}	
 	
@@ -401,7 +401,7 @@ PHP_METHOD(dmtxwrite, __construct)
 	char *message = NULL;
 	int message_len = 0;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "|s!", &message, &message_len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s!", &message, &message_len) == FAILURE) {
 		return;
 	}
 	
@@ -457,7 +457,7 @@ PHP_METHOD(dmtxwrite, save)
 	long symbol = DmtxSymbolSquareAuto, width, height, type = PHP_DMTX_MATRIX;
 	DmtxEncode *encode;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s|ls!", &filename, &filename_len, &symbol, &type) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|ls!", &filename, &filename_len, &symbol, &type) == FAILURE) {
 		return;
 	}
 

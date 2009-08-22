@@ -10,7 +10,7 @@ $w = new dmtxWrite("Hello");
 $w->save("test.png", dmtx::SYMBOL_SQUARE_AUTO);
 
 $r = new dmtxRead("test.png");
-var_dump($r->getInfo(1));
+var_dump($r->getInfo());
 
 ?>
 --EXPECT--

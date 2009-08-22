@@ -7,7 +7,7 @@ include dirname(__FILE__) . "/skipif.inc.php";
 --FILE--
 <?php
 $r = new dmtxread(dirname(__FILE__) . "/multi_region.jpg");
-var_dump($r->getInfo(1));
+var_dump($r->getInfo());
 ?>
 --EXPECT--
 array(1) {
