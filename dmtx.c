@@ -172,7 +172,7 @@ DmtxImage *php_create_dmtx_image_from_wand(MagickWand *magick_wand TSRMLS_DC)
 	
 	pixels = emalloc(3 * width * height * sizeof(unsigned char));
 
-	if (MagickExportImagePixels(magick_wand, 0, 0, width, height, "RGB", CharPixel, pixels) == MagickFalse) {
+	if (MagickGetImagePixels(magick_wand, 0, 0, width, height, "RGB", CharPixel, pixels) == MagickFalse) {
 		return NULL;
 	}
 
