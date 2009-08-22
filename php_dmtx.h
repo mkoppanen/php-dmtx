@@ -98,6 +98,7 @@ typedef struct _php_dmtx_write_object  {
 PHP_METHOD(dmtxread, __construct);
 PHP_METHOD(dmtxread, loadfile);
 PHP_METHOD(dmtxread, loadstring);
+PHP_METHOD(dmtxread, unsetscanregion);
 PHP_METHOD(dmtxread, setscanregion);
 PHP_METHOD(dmtxread, getinfo);
 

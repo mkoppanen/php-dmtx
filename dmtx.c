@@ -106,9 +106,13 @@ static
 		ZEND_ARG_INFO(0, scan_region_width)
 		ZEND_ARG_INFO(0, scan_region_height)
 	ZEND_END_ARG_INFO()
+	
+static
+	ZEND_BEGIN_ARG_INFO_EX(dmtxread_unsetscanregion_args, 0, 0, 0)
+	ZEND_END_ARG_INFO()
 
 static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 2)
+	ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 1)
 		ZEND_ARG_INFO(0, scan_gap)
 		ZEND_ARG_INFO(0, fix_errors)
 	ZEND_END_ARG_INFO()
@@ -119,6 +123,7 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, loadfile, dmtxread_loadfile_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, loadstring, dmtxread_loadstring_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setscanregion, dmtxread_setscanregion_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, unsetscanregion, dmtxread_unsetscanregion_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
@@ -134,10 +139,10 @@ static
 	ZEND_END_ARG_INFO()
 
 static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 2)
+	ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
 		ZEND_ARG_INFO(0, filename)
 		ZEND_ARG_INFO(0, symbol)
-		ZEND_ARG_INFO(0, format)
+		ZEND_ARG_INFO(0, type)
 	ZEND_END_ARG_INFO()
 
 static function_entry php_dmtx_write_class_methods[] =
@@ -307,7 +312,7 @@ PHP_METHOD(dmtxread, unsetscanregion)
 }
 /* }}} */
 
-/* {{{ proto array dmtxRead::getInfo(int scan_gap, bool fix_errors)
+/* {{{ proto array dmtxRead::getInfo(int scan_gap[, bool fix_errors])
 	Fetches the information from the image */
 PHP_METHOD(dmtxread, getinfo)
 {
@@ -322,9 +327,9 @@ PHP_METHOD(dmtxread, getinfo)
 	double rotate;
 	zval *edges;
 	char buffer[1024];
-	zend_bool fix_errors;
+	zend_bool fix_errors = 1;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "lb", &scan_gap, &fix_errors) == FAILURE) {
+	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "l|b", &scan_gap, &fix_errors) == FAILURE) {
 		return;
 	}	
 
@@ -378,7 +383,7 @@ PHP_METHOD(dmtxread, getinfo)
 			rotate_int -= 360;
 		}
 		
-		add_assoc_long(return_value,   "rotation_angle", rotate_int);
+		add_assoc_long(return_value, "rotation_angle", rotate_int);
 		
 		add_assoc_long(return_value, "matrix_width", dmtxGetSymbolAttribute(DmtxSymAttribSymbolRows, region->sizeIdx) );
 		add_assoc_long(return_value, "matrix_height", dmtxGetSymbolAttribute(DmtxSymAttribSymbolCols, region->sizeIdx) );
@@ -466,10 +471,6 @@ PHP_METHOD(dmtxwrite, setmessage)
 	}
 
 	intern = (php_dmtx_write_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
-
-	if (MagickGetNumberImages(intern->magick_wand) > 0) {
-		ClearMagickWand(intern->magick_wand);
-	}
 	
 	memset(intern->message, '\0', DMTXWRITE_BUFFER_SIZE);
 	strncpy(intern->message, message, message_len);
@@ -479,17 +480,17 @@ PHP_METHOD(dmtxwrite, setmessage)
 }
 /* }}} */
 
-/* {{{ proto bool dmtxWrite::save(string filename, int mode[, int type])
+/* {{{ proto bool dmtxWrite::save(string filename[, int symbol, int type])
 	Saves the message into a file */
 PHP_METHOD(dmtxwrite, save)
 {
  	php_dmtx_write_object *intern;
 	char *filename;
-	int filename_len;
-	long symbol, width, height, type;
+	int filename_len, status;
+	long symbol = DmtxSymbolSquareAuto, width, height, type;
 	DmtxEncode *encode;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "sl|s!", &filename, &filename_len, &symbol, &type) == FAILURE) {
+	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s|ls!", &filename, &filename_len, &symbol, &type) == FAILURE) {
 		return;
 	}
 
@@ -507,15 +508,26 @@ PHP_METHOD(dmtxwrite, save)
 	
 	/* Pack as RGB */
 	dmtxEncodeSetProp(encode, DmtxPropPixelPacking, DmtxPack24bppRGB);
+	dmtxEncodeSetProp(encode, DmtxPropSizeRequest, symbol);
 	
 	if (type == PHP_DMTX_MOSAIC) {
-		dmtxEncodeDataMosaic(encode, intern->message_len, (unsigned char *)intern->message);
+		status = dmtxEncodeDataMosaic(encode, intern->message_len, (unsigned char *)intern->message);
 	} else {
-		dmtxEncodeDataMatrix(encode, intern->message_len, (unsigned char *)intern->message);
+		status = dmtxEncodeDataMatrix(encode, intern->message_len, (unsigned char *)intern->message);
+	}
+
+	if (status == DmtxFail) {
+		dmtxEncodeDestroy(&encode);
+		PHP_DMTX_THROW_GENERIC_EXCEPTION("Failed to encode the image");
 	}
 
 	width  = dmtxImageGetProp(encode->image, DmtxPropWidth);
     height = dmtxImageGetProp(encode->image, DmtxPropHeight);
+
+	/* Clear if previous images */
+	if (MagickGetNumberImages(intern->magick_wand) > 0) {
+		ClearMagickWand(intern->magick_wand);
+	}
 
 	/* Import the pixels */
 	if (MagickConstituteImage(intern->magick_wand, width, height, "RGB", CharPixel, encode->image->pxl) == MagickFalse) {
@@ -553,7 +565,7 @@ static void php_dmtx_read_object_free_storage(void *object TSRMLS_DC)
 		return;
 	}
 
-	intern->magick_wand = DestroyMagickWand( intern->magick_wand );
+	intern->magick_wand = DestroyMagickWand(intern->magick_wand);
 	zend_object_std_dtor(&intern->zo TSRMLS_CC);
 	efree(intern);
 }
@@ -566,7 +578,7 @@ static void php_dmtx_write_object_free_storage(void *object TSRMLS_DC)
 		return;
 	}
 
-	intern->magick_wand = DestroyMagickWand( intern->magick_wand );
+	intern->magick_wand = DestroyMagickWand(intern->magick_wand);
 	zend_object_std_dtor(&intern->zo TSRMLS_CC);
 	efree(intern);
 }
