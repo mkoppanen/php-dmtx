@@ -10,7 +10,7 @@ if test $PHP_DMTX != "no"; then
 	
 	for i in $PHP_DMTX /usr /usr/local /opt;
 	do
-		test -r $i/include/dmtx.h && DMTX_PATH=$i && DMTX_OLD_IM=false && break
+		test -r $i/include/dmtx.h && DMTX_PATH=$i && break
 	done
 	
 	if test -z "$DMTX_PATH"; then
@@ -23,27 +23,40 @@ if test $PHP_DMTX != "no"; then
 	
 	for i in $PHP_DMTX_IMAGEMAGICK_DIR /usr/local /usr;
 	do
-		test -r $i/bin/MagickWand-config && WAND_BINARY=$i/bin/MagickWand-config && break
+		test -r $i/bin/MagickWand-config && WAND_BINARY=$i/bin/MagickWand-config && DMTX_NEW_IM="true" && break
 	done
+	
+	if test -z "$WAND_BINARY"; then
+		for i in $PHP_DMTX_IMAGEMAGICK_DIR /usr/local /usr;
+		do
+			test -r $i/bin/Wand-config && WAND_BINARY=$i/bin/Wand-config && break
+		done
+	fi
 
 	if test -z "$WAND_BINARY"; then
 		AC_MSG_ERROR(not found. Please provide a path to MagickWand-config)
 	else
 		AC_MSG_RESULT(found in $WAND_BINARY)
 	fi
+	
+	WAND_DIR="`$WAND_BINARY --prefix`"
 
+	if test -z $DMTX_NEW_IM; then
+		AC_DEFINE(DMTX_IMAGEMAGICK_OLD,1,[ ])
+	fi
+	
 	IMAGEMAGICK_CFLAGS=`$WAND_BINARY --cflags`
 	IMAGEMAGICK_LDFLAGS=`$WAND_BINARY --ldflags`
 	IMAGEMAGICK_LIBS=`$WAND_BINARY --libs`
-	
+
 	PHP_EVAL_INCLINE("$IMAGEMAGICK_CFLAGS", DMTX_SHARED_LIBADD)
 	PHP_EVAL_LIBLINE("$IMAGEMAGICK_LDFLAGS $IMAGEMAGICK_LIBS", DMTX_SHARED_LIBADD)
 
-	AC_DEFINE(HAVE_DMTX_IMAGEMAGICK,1,[ ])
-
-	AC_DEFINE(HAVE_DMTX,1,[ ])
 	PHP_ADD_LIBRARY_WITH_PATH(dmtx, $DMTX_PATH/lib, DMTX_SHARED_LIBADD)
 	PHP_ADD_INCLUDE($DMTX_PATH/include)
+	
+	AC_DEFINE(HAVE_DMTX_IMAGEMAGICK,1,[ ])
+	AC_DEFINE(HAVE_DMTX,1,[ ])
 	
 	PHP_SUBST(DMTX_SHARED_LIBADD)
 	PHP_NEW_EXTENSION(dmtx, dmtx.c, $ext_shared)
