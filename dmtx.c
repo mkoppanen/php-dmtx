@@ -84,28 +84,24 @@ zend_class_entry *php_dmtx_exception_class_entry;
 	} \
 
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_construct_args, 0, 0, 0)
-		ZEND_ARG_INFO(0, filename)
-	ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_construct_args, 0, 0, 0)
+	ZEND_ARG_INFO(0, filename)
+ZEND_END_ARG_INFO()
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadfile_args, 0, 0, 1)
-		ZEND_ARG_INFO(0, filename)
-	ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadfile_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, filename)
+ZEND_END_ARG_INFO()
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadstring_args, 0, 0, 1)
-		ZEND_ARG_INFO(0, image_string)
-	ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadstring_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, image_string)
+ZEND_END_ARG_INFO()
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 1)
-		ZEND_ARG_INFO(0, scan_gap)
-		ZEND_ARG_INFO(0, corrections)
-		ZEND_ARG_INFO(0, type)
-		ZEND_ARG_INFO(0, timeout_per_page)
-	ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, scan_gap)
+	ZEND_ARG_INFO(0, corrections)
+	ZEND_ARG_INFO(0, type)
+	ZEND_ARG_INFO(0, timeout_per_page)
+ZEND_END_ARG_INFO()
 
 static function_entry php_dmtx_read_class_methods[] =
 {
@@ -116,22 +112,22 @@ static function_entry php_dmtx_read_class_methods[] =
 	{ NULL, NULL, NULL }
 };
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_construct_args, 0, 0, 0)
-		ZEND_ARG_INFO(0, message)
-	ZEND_END_ARG_INFO()
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_setmessage_args, 0, 0, 1)
-		ZEND_ARG_INFO(0, message)
-	ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_construct_args, 0, 0, 0)
+	ZEND_ARG_INFO(0, message)
+ZEND_END_ARG_INFO()
 
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
-		ZEND_ARG_INFO(0, filename)
-		ZEND_ARG_INFO(0, symbol)
-		ZEND_ARG_INFO(0, type)
-	ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_setmessage_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, message)
+ZEND_END_ARG_INFO()
+
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, filename)
+	ZEND_ARG_INFO(0, symbol)
+	ZEND_ARG_INFO(0, type)
+ZEND_END_ARG_INFO()
 
 static function_entry php_dmtx_write_class_methods[] =
 {
@@ -149,7 +145,6 @@ static function_entry php_dmtx_class_methods[] =
 /* Create DmtxImage from MagickWand */
 DmtxImage *php_create_dmtx_image_from_wand(MagickWand *magick_wand TSRMLS_DC)
 {
-	DmtxImage *image = NULL;
 	long width, height;
 	unsigned char *pixels;
 
@@ -166,10 +161,7 @@ DmtxImage *php_create_dmtx_image_from_wand(MagickWand *magick_wand TSRMLS_DC)
 		return NULL;
 	}
 
-	image = dmtxImageCreate(pixels, width, height, DmtxPack24bppRGB);
-	efree(pixels);
-	
-	return image;
+	return dmtxImageCreate(pixels, width, height, DmtxPack24bppRGB);
 }
 
 /* {{{ proto void dmtxRead::__construct([string filename])
@@ -345,18 +337,26 @@ PHP_METHOD(dmtxread, getinfo)
 		DmtxImage *image;
 		zval *current_page;
 		
-		/* Current page is an array of regions */
-		MAKE_STD_ZVAL(current_page);
-		array_init(current_page);
-		
 		/* Get image */
 		image = php_create_dmtx_image_from_wand(intern->magick_wand TSRMLS_CC);
 	
 		if (!image) {
 			continue;
 		}
+		
 		decode = dmtxDecodeCreate(image, 1);
+		
+		if (!decode) {
+			efree(image->pxl);
+			dmtxImageDestroy(&image);
+			continue;
+		}
+
 		dmtxDecodeSetProp(decode, DmtxPropScanGap, scan_gap);
+
+		/* Current page is an array of regions */
+		MAKE_STD_ZVAL(current_page);
+		array_init(current_page);
 
 		/* Loop through all regions on the page */
 		for (;;) {
@@ -385,6 +385,7 @@ PHP_METHOD(dmtxread, getinfo)
 			dmtxRegionDestroy(&region);
 		}
 		add_index_zval(return_value, i, current_page);
+		efree(image->pxl);
 		dmtxImageDestroy(&image);
 	}
 	dmtxDecodeDestroy(&decode);

@@ -23,7 +23,7 @@ if test $PHP_DMTX != "no"; then
 	
 	for i in $PHP_DMTX_IMAGEMAGICK_DIR /usr/local /usr;
 	do
-		test -r $i/bin/MagickWand-config && WAND_BINARY=$i/bin/MagickWand-config && AC_DEFINE(DMTX_IMAGEMAGICK_OLD,1,[ ]) && break
+		test -r $i/bin/MagickWand-config && WAND_BINARY=$i/bin/MagickWand-config && DMTX_OLD_IM=true && break
 	done
 
 	if test -z "$WAND_BINARY"; then
@@ -31,12 +31,17 @@ if test $PHP_DMTX != "no"; then
 	else
 		AC_MSG_RESULT(found in $WAND_BINARY)
 	fi
-
-	IMAGEMAGICK_LDFLAGS=`$WAND_BINARY --ldflags`
+	
+	if test ! -z "$DMTX_OLD_IM"; then
+		AC_DEFINE(DMTX_IMAGEMAGICK_OLD,1,[ ])
+	fi
+	
 	IMAGEMAGICK_CFLAGS=`$WAND_BINARY --cflags`
+	IMAGEMAGICK_LDFLAGS=`$WAND_BINARY --ldflags`
+	IMAGEMAGICK_LIBS=`$WAND_BINARY --libs`
 	
 	PHP_EVAL_INCLINE("$IMAGEMAGICK_CFLAGS", DMTX_SHARED_LIBADD)
-	PHP_EVAL_LIBLINE("$IMAGEMAGICK_LDFLAGS", DMTX_SHARED_LIBADD)
+	PHP_EVAL_LIBLINE("$IMAGEMAGICK_LDFLAGS $IMAGEMAGICK_LIBS", DMTX_SHARED_LIBADD)
 
 	AC_DEFINE(HAVE_DMTX_IMAGEMAGICK,1,[ ])
 
