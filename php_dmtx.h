@@ -22,7 +22,7 @@
 
 /* Define Extension Properties */
 #define PHP_DMTX_EXTNAME "dmtx"
-#define PHP_DMTX_EXTVER  "0.0.1-dev"
+#define PHP_DMTX_EXTVER  "0.0.2-dev"
 
 #define PHP_DMTX_SC_NAME "dmtx"
 #define PHP_DMTX_READ_SC_NAME "dmtxRead"
@@ -47,12 +47,10 @@
 /* Include the dmtx header */
 #include <dmtx.h>
 
-#ifdef HAVE_DMTX_IMAGEMAGICK
-# ifdef DMTX_IMAGEMAGICK_OLD
+#ifdef DMTX_IMAGEMAGICK_OLD
 #  include <wand/magick-wand.h>
-# else
+#else
 #  include <wand/MagickWand.h>
-# endif
 #endif
 
 /* Some extra headers */
@@ -68,21 +66,20 @@ typedef struct _php_dmtx_object  {
 	zend_object zo;
 } php_dmtx_object;
 
+typedef struct _php_dmtx_scan_region {
+	int x;
+	int y;
+	int width;
+	int height;
+} php_dmtx_scan_region;
+
 /* Structure for dmtx object. */
 typedef struct _php_dmtx_read_object  {
 	zend_object zo;
-#ifdef HAVE_DMTX_IMAGEMAGICK
 	MagickWand *magick_wand;
-#else
-	char *image_string;
-	int image_string_len;
-#endif
 	int image_width;
 	int image_height;
-	int scan_region_x;
-	int scan_region_y;
-	int scan_region_width;
-	int scan_region_height;
+	php_dmtx_scan_region scan_region;
 	zend_bool use_scan_region;
 } php_dmtx_read_object;
 
@@ -91,9 +88,7 @@ typedef struct _php_dmtx_write_object  {
 	zend_object zo;
 	char message[DMTXWRITE_BUFFER_SIZE];
 	int message_len;
-#ifdef HAVE_DMTX_IMAGEMAGICK
 	MagickWand *magick_wand;
-#endif
 } php_dmtx_write_object;
 
 /* Method declarations, dmtx class is just 
