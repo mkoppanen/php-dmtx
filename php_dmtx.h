@@ -66,21 +66,10 @@ typedef struct _php_dmtx_object  {
 	zend_object zo;
 } php_dmtx_object;
 
-typedef struct _php_dmtx_scan_region {
-	int x;
-	int y;
-	int width;
-	int height;
-} php_dmtx_scan_region;
-
 /* Structure for dmtx object. */
 typedef struct _php_dmtx_read_object  {
 	zend_object zo;
 	MagickWand *magick_wand;
-	int image_width;
-	int image_height;
-	php_dmtx_scan_region scan_region;
-	zend_bool use_scan_region;
 } php_dmtx_read_object;
 
 /* Structure for dmtx object. */
@@ -98,8 +87,6 @@ typedef struct _php_dmtx_write_object  {
 PHP_METHOD(dmtxread, __construct);
 PHP_METHOD(dmtxread, loadfile);
 PHP_METHOD(dmtxread, loadstring);
-PHP_METHOD(dmtxread, unsetscanregion);
-PHP_METHOD(dmtxread, setscanregion);
 PHP_METHOD(dmtxread, getinfo);
 
 /* dmtxWrite class */

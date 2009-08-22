@@ -100,21 +100,11 @@ static
 	ZEND_END_ARG_INFO()
 
 static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_setscanregion_args, 0, 0, 4)
-		ZEND_ARG_INFO(0, scan_region_x)
-		ZEND_ARG_INFO(0, scan_region_y)
-		ZEND_ARG_INFO(0, scan_region_width)
-		ZEND_ARG_INFO(0, scan_region_height)
-	ZEND_END_ARG_INFO()
-	
-static
-	ZEND_BEGIN_ARG_INFO_EX(dmtxread_unsetscanregion_args, 0, 0, 0)
-	ZEND_END_ARG_INFO()
-
-static
 	ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 1)
 		ZEND_ARG_INFO(0, scan_gap)
-		ZEND_ARG_INFO(0, fix_errors)
+		ZEND_ARG_INFO(0, corrections)
+		ZEND_ARG_INFO(0, type)
+		ZEND_ARG_INFO(0, timeout_per_page)
 	ZEND_END_ARG_INFO()
 
 static function_entry php_dmtx_read_class_methods[] =
@@ -122,8 +112,6 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, __construct, dmtxread_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
 	PHP_ME(dmtxread, loadfile, dmtxread_loadfile_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, loadstring, dmtxread_loadstring_args, ZEND_ACC_PUBLIC)
-	PHP_ME(dmtxread, setscanregion, dmtxread_setscanregion_args, ZEND_ACC_PUBLIC)
-	PHP_ME(dmtxread, unsetscanregion, dmtxread_unsetscanregion_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
@@ -165,14 +153,16 @@ DmtxImage *php_create_dmtx_image_from_wand(MagickWand *magick_wand TSRMLS_DC)
 	long width, height;
 	unsigned char *pixels;
 
+	/* Make sure that image is RGB */
 	MagickSetImageColorspace(magick_wand, RGBColorspace);
 
-	width = MagickGetImageWidth(magick_wand);
+	width  = MagickGetImageWidth(magick_wand);
 	height = MagickGetImageHeight(magick_wand);
-	
-	pixels = emalloc(3 * width * height * sizeof(unsigned char));
+
+	pixels = emalloc((3 * width * height * sizeof(unsigned char)));
 
 	if (MagickGetImagePixels(magick_wand, 0, 0, width, height, "RGB", CharPixel, pixels) == MagickFalse) {
+		efree(pixels);
 		return NULL;
 	}
 
@@ -200,10 +190,6 @@ PHP_METHOD(dmtxread, __construct)
 		if (MagickReadImage(intern->magick_wand, filename) == MagickFalse) {
 			PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 		}
-
-		intern->image_width = MagickGetImageWidth(intern->magick_wand);
-		intern->image_height = MagickGetImageHeight(intern->magick_wand);
-		intern->use_scan_region = 0;
 	}
 	return;
 }
@@ -226,10 +212,6 @@ PHP_METHOD(dmtxread, loadfile)
 	if (MagickReadImage(intern->magick_wand, filename) == MagickFalse) {
 		PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 	}
-
-	intern->image_width = MagickGetImageWidth(intern->magick_wand);
-	intern->image_height = MagickGetImageHeight(intern->magick_wand);
-	intern->use_scan_region = 0;
 	RETURN_TRUE;
 }
 /* }}} */
@@ -241,7 +223,6 @@ PHP_METHOD(dmtxread, loadstring)
 	php_dmtx_read_object *intern;
 	char *image_string;
 	int image_string_len;
-	int image_width, image_height;
 
 	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s", &image_string, &image_string_len) == FAILURE) {
 		return;
@@ -253,176 +234,161 @@ PHP_METHOD(dmtxread, loadstring)
 		PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 	}
 
-	image_width = MagickGetImageWidth(intern->magick_wand);
-	image_height = MagickGetImageHeight(intern->magick_wand);
-
-	intern->image_width = image_width;
-	intern->image_height = image_height;
-	intern->use_scan_region = 0;
 	RETURN_TRUE;
 }
 /* }}} */
 
-/* {{{ proto bool dmtxRead::setScanRegion(int x, int y, int width, int height)
-	Loads a file into the object */
-PHP_METHOD(dmtxread, setscanregion)
+/* {{{ static void _add_assoc_pixel(zval *array, char *key, DmtxPixelLoc pixel) */
+static void _add_assoc_pixel(zval *array, char *key, DmtxPixelLoc pixel)
 {
-	php_dmtx_read_object *intern;
-	long scan_x, scan_y, scan_width, scan_height;
+	char *buffer;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "llll", &scan_x, &scan_y, &scan_width, &scan_height) == FAILURE) {
-		return;
-	}
+	spprintf(&buffer, 512, "%dx%d", pixel.X, pixel.Y);
+	add_assoc_string(array, key, buffer, 0);
+}
+/* }}} */
+
+/* {{{ static zval *_php_dmtx_region_to_array(DmtxDecode *decode, DmtxRegion *region, int type, int corrections TSRMLS_DC) */
+static zval *_php_dmtx_region_to_array(DmtxDecode *decode, DmtxRegion *region, int type, int corrections TSRMLS_DC)
+{
+	zval *array, *edges, *bounds;
+	DmtxMessage *message;
 	
-	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
-	if (MagickGetNumberImages(intern->magick_wand) == 0) {
-		PHP_DMTX_THROW_GENERIC_EXCEPTION("The object does not contain an image");
+	double rotate;
+	int rotate_int;
+
+	/* This is the message */
+	if (type == PHP_DMTX_MOSAIC) {
+		message = dmtxDecodeMosaicRegion(decode, region, corrections);
 	} else {
-		if (((scan_x + scan_width) > (intern->image_width - 1)) ||
-			((scan_y + scan_height) > (intern->image_height - 1))) {
-			PHP_DMTX_THROW_GENERIC_EXCEPTION("The scan region is larger than the actual image size");
-		}
-
-		if ((scan_x < 0) || (scan_y < 0)) {
-			PHP_DMTX_THROW_GENERIC_EXCEPTION("The scan region coordinates can not be negative");
-		}
-
-		intern->scan_region.x = scan_x;
-		intern->scan_region.y = scan_y;
-		intern->scan_region.width = scan_width;
-		intern->scan_region.height = scan_height;
-
-		intern->use_scan_region = 1;
-		RETURN_TRUE;
+		message = dmtxDecodeMatrixRegion(decode, region, corrections);
 	}
-}
-/* }}} */
 
-/* {{{ proto bool dmtxRead::unsetScanRegion()
-	Unsets a scan region */
-PHP_METHOD(dmtxread, unsetscanregion)
-{
-	php_dmtx_read_object *intern;
+	if (!message) {
+		return NULL;
+	}
 	
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
-		return;
+	MAKE_STD_ZVAL(array);
+	array_init(array);
+
+	add_assoc_string(array, "message", (char *)message->output, 1);
+	add_assoc_long(array, "codewords", message->outputIdx);
+	
+	dmtxMessageDestroy(&message);
+	
+	rotate = (2 * M_PI) + (atan2(region->fit2raw[0][1], region->fit2raw[1][1]) - atan2(region->fit2raw[1][0], region->fit2raw[0][0])) / 2.0;
+	rotate_int = (int)(rotate * 180/M_PI + 0.5);
+     
+	if (rotate_int >= 360) {
+		rotate_int -= 360;
 	}
-	intern->use_scan_region = 0;
-	RETURN_TRUE;
+	
+	add_assoc_long(array, "rotation_angle", rotate_int);
+	
+	add_assoc_long(array, "matrix_width", dmtxGetSymbolAttribute(DmtxSymAttribSymbolRows, region->sizeIdx) );
+	add_assoc_long(array, "matrix_height", dmtxGetSymbolAttribute(DmtxSymAttribSymbolCols, region->sizeIdx) );
+
+	add_assoc_long(array, "data_regions_horizontal", dmtxGetSymbolAttribute(DmtxSymAttribHorizDataRegions, region->sizeIdx));
+	add_assoc_long(array, "data_regions_vertical", dmtxGetSymbolAttribute(DmtxSymAttribVertDataRegions, region->sizeIdx));
+
+	add_assoc_long(array, "interleaved_blocks", dmtxGetSymbolAttribute(DmtxSymAttribInterleavedBlocks, region->sizeIdx));
+
+	MAKE_STD_ZVAL(edges);
+	array_init(edges);
+	
+	_add_assoc_pixel(edges, "left", region->leftLoc);
+	_add_assoc_pixel(edges, "bottom", region->bottomLoc);
+	_add_assoc_pixel(edges, "top", region->topLoc);
+	_add_assoc_pixel(edges, "right", region->rightLoc);	
+
+	MAKE_STD_ZVAL(bounds);
+	array_init(bounds);
+	
+	_add_assoc_pixel(bounds, "bound_min", region->boundMin);
+	_add_assoc_pixel(bounds, "bound_max", region->boundMax);
+	
+	/* Add edges and bounds to return array */
+	add_assoc_zval(array, "edges", edges);
+	add_assoc_zval(array, "bounds", bounds);
+	
+	return array;
 }
 /* }}} */
 
-/* {{{ proto array dmtxRead::getInfo(int scan_gap[, bool fix_errors])
+/* {{{ proto array dmtxRead::getInfo(int scan_gap[, int corrections, int type, int timeout_ms])
 	Fetches the information from the image */
 PHP_METHOD(dmtxread, getinfo)
 {
 	php_dmtx_read_object *intern;
 	DmtxDecode *decode;
-	DmtxPixelLoc p0, p1;
-	DmtxRegion *region;
-	DmtxMessage *message;
-	DmtxImage *image;
-	long scan_gap = 0;
-	int rotate_int;
-	double rotate;
-	zval *edges;
-	char buffer[1024];
-	zend_bool fix_errors = 1;
+	long scan_gap = 0, i, type = PHP_DMTX_MATRIX;
+	long corrections = DmtxUndefined, timeout_ms = DmtxUndefined;
+	DmtxTime timeout;
 
-	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "l|b", &scan_gap, &fix_errors) == FAILURE) {
+	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "l|bll", &scan_gap, &corrections, &type, &timeout_ms) == FAILURE) {
 		return;
 	}	
-
-	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
-	image  = php_create_dmtx_image_from_wand(intern->magick_wand TSRMLS_CC);
-
-	if (!image) {
-		PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
-	}
-
+	
 	if (scan_gap <= 0) {
 		PHP_DMTX_THROW_GENERIC_EXCEPTION("The scan gap needs to be larger than zero");
 	}
 
-	if (intern->use_scan_region == 0) {
-		p0.X = p0.Y = 0;
-		p1.X = image->width - 1;
-		p1.Y = image->height - 1;
-	} else {
-		p0.X = intern->scan_region.x;
-		p1.X = intern->scan_region.x + intern->scan_region.width;
-
-		p0.Y = intern->scan_region.y;
-		p1.Y = intern->scan_region.y + intern->scan_region.height;
-	}
-
-	decode = dmtxDecodeCreate(image, 1);
-	region = dmtxRegionFindNext(decode, NULL);
-
-	/* No region found */
-	if (!region) {
-		dmtxImageDestroy(&image);
-		dmtxDecodeDestroy(&decode);
-		RETURN_NULL();
-	}
-
-	/* This is the message */
-	message = dmtxDecodeMatrixRegion(decode, region, DmtxUndefined);
-
-	if (message != NULL) {
-		rotate_int = 0;
-		
-		array_init(return_value);
-		add_assoc_string(return_value, "message",        (char *)message->output, 1);
-		add_assoc_long(return_value,   "codewords",      message->outputIdx);
-		
-		rotate = (2 * M_PI) + (atan2(region->fit2raw[0][1], region->fit2raw[1][1]) - atan2(region->fit2raw[1][0], region->fit2raw[0][0])) / 2.0;
-		rotate_int = (int)(rotate * 180/M_PI + 0.5);
-      
-		if (rotate_int >= 360) {
-			rotate_int -= 360;
-		}
-		
-		add_assoc_long(return_value, "rotation_angle", rotate_int);
-		
-		add_assoc_long(return_value, "matrix_width", dmtxGetSymbolAttribute(DmtxSymAttribSymbolRows, region->sizeIdx) );
-		add_assoc_long(return_value, "matrix_height", dmtxGetSymbolAttribute(DmtxSymAttribSymbolCols, region->sizeIdx) );
-
-		add_assoc_long(return_value, "data_regions_horizontal", dmtxGetSymbolAttribute(DmtxSymAttribHorizDataRegions, region->sizeIdx));
-		add_assoc_long(return_value, "data_regions_vertical", dmtxGetSymbolAttribute(DmtxSymAttribVertDataRegions, region->sizeIdx));
-
-		add_assoc_long(return_value, "interleaved_blocks", dmtxGetSymbolAttribute(DmtxSymAttribInterleavedBlocks, region->sizeIdx));
-
-		MAKE_STD_ZVAL(edges);
-		array_init(edges);
-		
-		memset(buffer, 0, 1024);
-		sprintf(buffer, "%dx%d", region->leftLoc.X, region->leftLoc.Y);
-		add_assoc_string(edges, "left", buffer, 1);
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
 	
-		memset(buffer, 0, 1024);
-		sprintf(buffer, "%dx%d", region->bottomLoc.X, region->bottomLoc.Y);
-		add_assoc_string(edges, "bottom", buffer, 1);
-		
-		memset(buffer, 0, 1024);
-		sprintf(buffer, "%dx%d", region->topLoc.X, region->topLoc.Y);
-		add_assoc_string(edges, "top", buffer, 1);
-		
-		memset(buffer, 0, 1024);
-		sprintf(buffer, "%dx%d", region->rightLoc.X, region->rightLoc.Y);
-		add_assoc_string(edges, "right", buffer, 1);		
+    MagickResetIterator(intern->magick_wand);
+    
+	/* init the return value as an array */
+	array_init(return_value);
 
-		add_assoc_zval(return_value, "edges", edges);
+	/* Loop through all pages */
+	for (i = 0; MagickNextImage(intern->magick_wand) != MagickFalse; i++) {
+		DmtxImage *image;
+		zval *current_page;
+		
+		/* Current page is an array of regions */
+		MAKE_STD_ZVAL(current_page);
+		array_init(current_page);
+		
+		/* Get image */
+		image = php_create_dmtx_image_from_wand(intern->magick_wand TSRMLS_CC);
+	
+		if (!image) {
+			continue;
+		}
+		decode = dmtxDecodeCreate(image, 1);
+		dmtxDecodeSetProp(decode, DmtxPropScanGap, scan_gap);
 
-		dmtxDecodeDestroy(&decode);
-		dmtxMessageDestroy(&message);
+		/* Loop through all regions on the page */
+		for (;;) {
+			DmtxRegion *region;
+			zval *region_array;
+			
+			/* Let's see how it goes */
+			if (timeout_ms != DmtxUndefined) {
+            	timeout = dmtxTimeAdd(dmtxTimeNow(), timeout_ms);
+				region = dmtxRegionFindNext(decode, &timeout);
+			} else {
+				region = dmtxRegionFindNext(decode, NULL);
+			}
+
+			/* No region found */
+			if (!region) {
+				break;
+			}
+			
+			/* Convert region info to php array */
+			region_array = _php_dmtx_region_to_array(decode, region, type, corrections TSRMLS_CC);
+			
+			if (region_array) {
+				add_next_index_zval(current_page, region_array);
+			}
+			dmtxRegionDestroy(&region);
+		}
+		add_index_zval(return_value, i, current_page);
 		dmtxImageDestroy(&image);
-		return;
-	} else {
-		dmtxImageDestroy(&image);
-		dmtxDecodeDestroy(&decode);
-		RETURN_NULL();
 	}
+	dmtxDecodeDestroy(&decode);
+	return;
 }
 /* }}} */
 
@@ -487,7 +453,7 @@ PHP_METHOD(dmtxwrite, save)
  	php_dmtx_write_object *intern;
 	char *filename;
 	int filename_len, status;
-	long symbol = DmtxSymbolSquareAuto, width, height, type;
+	long symbol = DmtxSymbolSquareAuto, width, height, type = PHP_DMTX_MATRIX;
 	DmtxEncode *encode;
 
 	if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s|ls!", &filename, &filename_len, &symbol, &type) == FAILURE) {
@@ -612,12 +578,6 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	memset(&intern->zo, 0, sizeof(php_dmtx_read_object));
 
 	intern->magick_wand = NewMagickWand();
-
-	intern->use_scan_region = 0;
-	intern->scan_region.x = 0;
-	intern->scan_region.y = 0;
-	intern->scan_region.width = 0;
-	intern->scan_region.height = 0;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
