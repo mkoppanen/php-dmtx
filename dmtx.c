@@ -96,11 +96,19 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadstring_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, image_string)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_settimeout_args, 0, 0, 0)
+	ZEND_ARG_INFO(0, timeout)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_setlimit_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, start)
+	ZEND_ARG_INFO(0, limit)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, scan_gap)
 	ZEND_ARG_INFO(0, corrections)
 	ZEND_ARG_INFO(0, type)
-	ZEND_ARG_INFO(0, timeout_per_page)
 ZEND_END_ARG_INFO()
 
 static function_entry php_dmtx_read_class_methods[] =
@@ -108,6 +116,8 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, __construct, dmtxread_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
 	PHP_ME(dmtxread, loadfile, dmtxread_loadfile_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, loadstring, dmtxread_loadstring_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, settimeout, dmtxread_settimeout_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, setlimit, dmtxread_setlimit_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
@@ -121,7 +131,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_setmessage_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, message)
 ZEND_END_ARG_INFO()
-
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, filename)
@@ -230,6 +239,43 @@ PHP_METHOD(dmtxread, loadstring)
 }
 /* }}} */
 
+/* {{{ proto bool dmtxRead::setTimeout(int timeout)
+	Set timeout for reading. Negative number unsets timeout */
+PHP_METHOD(dmtxread, settimeout)
+{
+	php_dmtx_read_object *intern;
+	long timeout_ms;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &timeout_ms) == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	intern->options.timeout_ms = timeout_ms;
+	
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::setLimit(int start, int limit)
+	Limit which pages to scan */
+PHP_METHOD(dmtxread, setlimit)
+{
+	php_dmtx_read_object *intern;
+	long start, limit = -1;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l|l", &start, &limit) == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+
+	intern->options.start = (start < 0) ? 0 : start;
+	intern->options.limit = limit;
+	RETURN_TRUE;
+}
+/* }}} */
+
 /* {{{ static void _add_assoc_pixel(zval *array, char *key, DmtxPixelLoc pixel) */
 static void _add_assoc_pixel(zval *array, char *key, DmtxPixelLoc pixel)
 {
@@ -312,12 +358,12 @@ static zval *_php_dmtx_region_to_array(DmtxDecode *decode, DmtxRegion *region, i
 PHP_METHOD(dmtxread, getinfo)
 {
 	php_dmtx_read_object *intern;
-	DmtxDecode *decode;
-	long scan_gap = 1, i, type = PHP_DMTX_MATRIX;
-	long corrections = DmtxUndefined, timeout_ms = DmtxUndefined;
+	long scan_gap = 1, corrections = DmtxUndefined, type = PHP_DMTX_MATRIX;
 	DmtxTime timeout;
+	
+	long i, j, start, limit;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbll", &scan_gap, &corrections, &type, &timeout_ms) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbl", &scan_gap, &corrections, &type) == FAILURE) {
 		return;
 	}	
 	
@@ -326,16 +372,41 @@ PHP_METHOD(dmtxread, getinfo)
 	}
 
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
-	
-    MagickResetIterator(intern->magick_wand);
     
 	/* init the return value as an array */
 	array_init(return_value);
+	
+	if (intern->options.start <= 0) {
+		start = 0;
+		MagickResetIterator(intern->magick_wand);
+	} else {
+		/* Set iterator to one before because iteration uses MagickNextImage */
+		if (MagickSetIteratorIndex(intern->magick_wand, (intern->options.start - 1)) == MagickFalse) {
+			MagickResetIterator(intern->magick_wand);
+			start = 0;
+		} else {
+			start = intern->options.start;
+		}
+	}
+
+	if (intern->options.limit < 0) {
+		limit = MagickGetNumberImages(intern->magick_wand);
+	} else {
+		limit = intern->options.limit;
+	}
 
 	/* Loop through all pages */
-	for (i = 0; MagickNextImage(intern->magick_wand) != MagickFalse; i++) {
+	j = 0;
+	for (i = start; MagickNextImage(intern->magick_wand) != MagickFalse; i++) {
 		DmtxImage *image;
+		DmtxDecode *decode;
 		zval *current_page;
+		
+		/* Honor the limit */
+		if (j >= limit) {
+			break;
+		}
+		j++;
 		
 		/* Get image */
 		image = php_create_dmtx_image_from_wand(intern->magick_wand TSRMLS_CC);
@@ -364,8 +435,8 @@ PHP_METHOD(dmtxread, getinfo)
 			zval *region_array;
 			
 			/* Let's see how it goes */
-			if (timeout_ms != DmtxUndefined) {
-            	timeout = dmtxTimeAdd(dmtxTimeNow(), timeout_ms);
+			if (intern->options.timeout_ms >= 0) {
+            	timeout = dmtxTimeAdd(dmtxTimeNow(), intern->options.timeout_ms);
 				region = dmtxRegionFindNext(decode, &timeout);
 			} else {
 				region = dmtxRegionFindNext(decode, NULL);
@@ -387,8 +458,8 @@ PHP_METHOD(dmtxread, getinfo)
 		add_index_zval(return_value, i, current_page);
 		efree(image->pxl);
 		dmtxImageDestroy(&image);
+		dmtxDecodeDestroy(&decode);
 	}
-	dmtxDecodeDestroy(&decode);
 	return;
 }
 /* }}} */
@@ -579,6 +650,10 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	memset(&intern->zo, 0, sizeof(php_dmtx_read_object));
 
 	intern->magick_wand = NewMagickWand();
+	
+	intern->options.timeout_ms = -1;
+	intern->options.start = -1;
+	intern->options.limit = -1;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
@@ -597,11 +672,9 @@ static zend_object_value php_dmtx_write_object_new(zend_class_entry *class_type 
 	/* Allocate memory for it */
 	intern = emalloc(sizeof(php_dmtx_write_object));
 	memset(&intern->zo, 0, sizeof(php_dmtx_write_object));
-
-
 	intern->magick_wand = NewMagickWand();
 
-	memset( intern->message, '\0', DMTXWRITE_BUFFER_SIZE);
+	memset(intern->message, '\0', DMTXWRITE_BUFFER_SIZE);
 	intern->message_len = 0;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);

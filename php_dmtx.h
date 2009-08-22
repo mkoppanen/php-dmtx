@@ -66,10 +66,17 @@ typedef struct _php_dmtx_object  {
 	zend_object zo;
 } php_dmtx_object;
 
+typedef struct _php_dmtx_read_opts {
+	long timeout_ms;
+	long start;
+	long limit;
+} php_dmtx_read_opts;
+
 /* Structure for dmtx object. */
 typedef struct _php_dmtx_read_object  {
 	zend_object zo;
 	MagickWand *magick_wand;
+	php_dmtx_read_opts options;
 } php_dmtx_read_object;
 
 /* Structure for dmtx object. */
@@ -87,6 +94,8 @@ typedef struct _php_dmtx_write_object  {
 PHP_METHOD(dmtxread, __construct);
 PHP_METHOD(dmtxread, loadfile);
 PHP_METHOD(dmtxread, loadstring);
+PHP_METHOD(dmtxread, settimeout);
+PHP_METHOD(dmtxread, setlimit);
 PHP_METHOD(dmtxread, getinfo);
 
 /* dmtxWrite class */
