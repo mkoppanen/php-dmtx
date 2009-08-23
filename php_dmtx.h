@@ -66,6 +66,14 @@ typedef struct _php_dmtx_object  {
 	zend_object zo;
 } php_dmtx_object;
 
+typedef struct _php_dmtx_scan_region {
+	long x_min;
+	long x_max;
+	long y_min;
+	long y_max;
+	zend_bool active;
+} php_dmtx_scan_region;
+
 typedef struct _php_dmtx_read_opts {
 	long timeout_ms;
 	long start;
@@ -79,6 +87,7 @@ typedef struct _php_dmtx_read_object  {
 	zend_object zo;
 	MagickWand *magick_wand;
 	php_dmtx_read_opts options;
+	php_dmtx_scan_region scan_region;
 } php_dmtx_read_object;
 
 /* Structure for dmtx object. */
@@ -100,13 +109,16 @@ PHP_METHOD(dmtxread, settimeout);
 PHP_METHOD(dmtxread, setlimit);
 PHP_METHOD(dmtxread, setshrink);
 PHP_METHOD(dmtxread, setsymbolshape);
+PHP_METHOD(dmtxread, setscanregion);
 
 PHP_METHOD(dmtxread, gettimeout);
 PHP_METHOD(dmtxread, getlimit);
 PHP_METHOD(dmtxread, getshrink);
 PHP_METHOD(dmtxread, getsymbolshape);
+PHP_METHOD(dmtxread, getscanregion);
 
 PHP_METHOD(dmtxread, getinfo);
+PHP_METHOD(dmtxread, unsetscanregion);
 
 /* dmtxWrite class */
 PHP_METHOD(dmtxwrite, __construct);

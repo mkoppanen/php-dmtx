@@ -124,6 +124,13 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, type)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_setscanregion_args, 0, 0, 4)
+	ZEND_ARG_INFO(0, x_min)
+	ZEND_ARG_INFO(0, x_max)
+	ZEND_ARG_INFO(0, y_min)
+	ZEND_ARG_INFO(0, y_max)
+ZEND_END_ARG_INFO()
+
 static function_entry php_dmtx_read_class_methods[] =
 {
 	PHP_ME(dmtxread, __construct, dmtxread_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
@@ -133,13 +140,17 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, setlimit, dmtxread_setlimit_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setsymbolshape, dmtxread_setsymbolshape_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setshrink, dmtxread_setshrink_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, setscanregion, dmtxread_setscanregion_args, ZEND_ACC_PUBLIC)
+	
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
+	
 	
 	PHP_ME(dmtxread, gettimeout, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getlimit, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getsymbolshape, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getshrink, dmtxread_empty_args, ZEND_ACC_PUBLIC)
-	
+	PHP_ME(dmtxread, getscanregion, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, unsetscanregion, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
 
@@ -376,7 +387,7 @@ PHP_METHOD(dmtxread, setsymbolshape)
 /* }}} */
 
 /* {{{ proto bool dmtxRead::setShrink(int shrink)
-	Symbol shape */
+	set shrink */
 PHP_METHOD(dmtxread, setshrink)
 {
 	php_dmtx_read_object *intern;
@@ -390,6 +401,73 @@ PHP_METHOD(dmtxread, setshrink)
 	intern->options.shrink = shrink;
 	
 	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::setScanRegion(int x_min, int x_max, int y_min, int y_max)
+	Set scan region */
+PHP_METHOD(dmtxread, setscanregion)
+{
+	php_dmtx_read_object *intern;
+	long x_min, x_max, y_min, y_max;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "llll", &x_min, &x_max, &y_min, &y_max) == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	
+	intern->scan_region.x_min = (x_min < 0) ? 0 : x_min;
+	intern->scan_region.x_max = x_max;
+	
+	intern->scan_region.y_min = (y_min < 0) ? 0 : y_min;
+	intern->scan_region.y_max = y_max;
+	
+	intern->scan_region.active = 1;
+	
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::unsetScanRegion()
+	Unset scan region */
+PHP_METHOD(dmtxread, unsetscanregion)
+{
+	php_dmtx_read_object *intern;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	intern->scan_region.active = 0;
+	
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto array dmtxRead::getScanRegion()
+	get scan region */
+PHP_METHOD(dmtxread, getscanregion)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	if (!intern->scan_region.active) {
+		return;
+	}	
+	
+	array_init(return_value);	
+	add_assoc_long(return_value, "x_min", intern->scan_region.x_min);
+	add_assoc_long(return_value, "x_max", intern->scan_region.x_max);
+	add_assoc_long(return_value, "y_min", intern->scan_region.y_min);
+	add_assoc_long(return_value, "y_max", intern->scan_region.y_max);
+
+	return;
 }
 /* }}} */
 
@@ -480,7 +558,7 @@ PHP_METHOD(dmtxread, getinfo)
 	
 	long i, j, start, limit;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbl", &scan_gap, &corrections, &type) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbla", &scan_gap, &corrections, &type) == FAILURE) {
 		return;
 	}
 
@@ -489,6 +567,7 @@ PHP_METHOD(dmtxread, getinfo)
 	}
 
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+
     
 	/* init the return value as an array */
 	array_init(return_value);
@@ -542,9 +621,29 @@ PHP_METHOD(dmtxread, getinfo)
 		
 		dmtxDecodeSetProp(decode, DmtxPropScanGap, scan_gap);
 		
+		if (intern->scan_region.active) {
+			
+			if (intern->scan_region.x_max > image->width) {
+				intern->scan_region.x_max = image->width;
+			}
+
+			if (intern->scan_region.y_max > image->height) {
+				intern->scan_region.y_max = image->height;
+			}			
+			
+			if (dmtxDecodeSetProp(decode, DmtxPropXmin, intern->scan_region.x_min) == DmtxFail ||
+				dmtxDecodeSetProp(decode, DmtxPropXmax, intern->scan_region.x_max) == DmtxFail ||
+				dmtxDecodeSetProp(decode, DmtxPropYmin, intern->scan_region.y_min) == DmtxFail ||
+				dmtxDecodeSetProp(decode, DmtxPropYmax, intern->scan_region.y_max) == DmtxFail) {
+					
+					PHP_DMTX_THROW_GENERIC_EXCEPTION("Failed to set scan region");
+				}
+		}
+		
 		if (dmtxDecodeSetProp(decode, DmtxPropSymbolSize, intern->options.symbol) == DmtxFail) {
 			efree(image->pxl);
 			dmtxImageDestroy(&image);
+			PHP_DMTX_THROW_GENERIC_EXCEPTION("Failed to set symbol");
 		}
 		
 		/* Current page is an array of regions */
@@ -778,6 +877,14 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->options.limit = -1;
 	intern->options.symbol = DmtxSymbolShapeAuto;
 	intern->options.shrink = 1;
+	
+	intern->scan_region.x_min = 0;
+	intern->scan_region.x_max = 0;
+	
+	intern->scan_region.y_min = 0;
+	intern->scan_region.y_max = 0;
+	
+	intern->scan_region.active = 0;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
