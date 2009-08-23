@@ -101,6 +101,11 @@ PHP_METHOD(dmtxread, setlimit);
 PHP_METHOD(dmtxread, setshrink);
 PHP_METHOD(dmtxread, setsymbolshape);
 
+PHP_METHOD(dmtxread, gettimeout);
+PHP_METHOD(dmtxread, getlimit);
+PHP_METHOD(dmtxread, getshrink);
+PHP_METHOD(dmtxread, getsymbolshape);
+
 PHP_METHOD(dmtxread, getinfo);
 
 /* dmtxWrite class */

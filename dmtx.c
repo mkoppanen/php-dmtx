@@ -86,6 +86,8 @@ zend_class_entry *php_dmtx_exception_class_entry;
 		break; \
 	} \
 
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_empty_args, 0, 0, 0)
+ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxread_construct_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, filename)
@@ -132,6 +134,12 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, setsymbolshape, dmtxread_setsymbolshape_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setshrink, dmtxread_setshrink_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
+	
+	PHP_ME(dmtxread, gettimeout, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, getlimit, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, getsymbolshape, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, getshrink, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	
 	{ NULL, NULL, NULL }
 };
 
@@ -254,6 +262,57 @@ PHP_METHOD(dmtxread, loadstring)
 	RETURN_TRUE;
 }
 /* }}} */
+
+PHP_METHOD(dmtxread, gettimeout)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+	
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	RETURN_LONG(intern->options.timeout_ms);
+}
+
+PHP_METHOD(dmtxread, getlimit)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}	
+	
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	array_init(return_value);
+	add_assoc_long(return_value, "start", intern->options.start);
+	add_assoc_long(return_value, "limit", intern->options.limit);
+	return;
+}
+
+PHP_METHOD(dmtxread, getsymbolshape)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	RETURN_LONG(intern->options.symbol);
+}
+
+PHP_METHOD(dmtxread, getshrink)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+	
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	RETURN_LONG(intern->options.shrink);
+}
+
 
 /* {{{ proto bool dmtxRead::setTimeout(int timeout)
 	Set timeout for reading. Negative number unsets timeout */
@@ -718,6 +777,7 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->options.start = -1;
 	intern->options.limit = -1;
 	intern->options.symbol = DmtxSymbolShapeAuto;
+	intern->options.shrink = 1;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
