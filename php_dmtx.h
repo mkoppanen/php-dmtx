@@ -70,6 +70,8 @@ typedef struct _php_dmtx_read_opts {
 	long timeout_ms;
 	long start;
 	long limit;
+	long symbol;
+	long shrink;
 } php_dmtx_read_opts;
 
 /* Structure for dmtx object. */
@@ -96,6 +98,9 @@ PHP_METHOD(dmtxread, loadfile);
 PHP_METHOD(dmtxread, loadstring);
 PHP_METHOD(dmtxread, settimeout);
 PHP_METHOD(dmtxread, setlimit);
+PHP_METHOD(dmtxread, setshrink);
+PHP_METHOD(dmtxread, setsymbolshape);
+
 PHP_METHOD(dmtxread, getinfo);
 
 /* dmtxWrite class */

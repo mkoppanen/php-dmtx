@@ -18,7 +18,6 @@ if test $PHP_DMTX != "no"; then
 	fi
 
 	AC_MSG_RESULT(found in $DMTX_PATH/include/dmtx.h)
-
 	AC_MSG_CHECKING(ImageMagick MagickWand API configuration program)
 	
 	for i in $PHP_DMTX_IMAGEMAGICK_DIR /usr/local /usr;

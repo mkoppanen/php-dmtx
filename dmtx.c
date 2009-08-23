@@ -32,6 +32,9 @@ zend_class_entry *php_dmtx_exception_class_entry;
 #define PHP_DMTX_MATRIX 1
 #define PHP_DMTX_MOSAIC 2
 
+#define X_RESOLUTION 72
+#define Y_RESOLUTION 72
+
 #define PHP_DMTX_THROW_IMAGE_EXCEPTION(magick_wand, alternative_message) \
 { \
 	ExceptionType severity; \
@@ -96,8 +99,16 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_loadstring_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, image_string)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(dmtxread_settimeout_args, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_settimeout_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, timeout)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_setshrink_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, shrink)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_setsymbolshape_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, shape)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxread_setlimit_args, 0, 0, 1)
@@ -118,6 +129,8 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, loadstring, dmtxread_loadstring_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, settimeout, dmtxread_settimeout_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setlimit, dmtxread_setlimit_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, setsymbolshape, dmtxread_setsymbolshape_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, setshrink, dmtxread_setshrink_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
@@ -188,6 +201,7 @@ PHP_METHOD(dmtxread, __construct)
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
 
 	if (filename && filename_len > 0) {
+		MagickSetResolution(intern->magick_wand, X_RESOLUTION, Y_RESOLUTION);
 		if (MagickReadImage(intern->magick_wand, filename) == MagickFalse) {
 			PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 		}
@@ -210,6 +224,7 @@ PHP_METHOD(dmtxread, loadfile)
 
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
 
+	MagickSetResolution(intern->magick_wand, X_RESOLUTION, Y_RESOLUTION);
 	if (MagickReadImage(intern->magick_wand, filename) == MagickFalse) {
 		PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 	}
@@ -231,6 +246,7 @@ PHP_METHOD(dmtxread, loadstring)
 
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
 
+	MagickSetResolution(intern->magick_wand, X_RESOLUTION, Y_RESOLUTION);
 	if (MagickReadImageBlob(intern->magick_wand, image_string, image_string_len) == MagickFalse) {
 		PHP_DMTX_THROW_IMAGE_EXCEPTION(intern->magick_wand, "Unable to read the image");
 	}
@@ -272,6 +288,48 @@ PHP_METHOD(dmtxread, setlimit)
 
 	intern->options.start = (start < 0) ? 0 : start;
 	intern->options.limit = limit;
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::setSymbolShape(int shape)
+	Symbol shape */
+PHP_METHOD(dmtxread, setsymbolshape)
+{
+	php_dmtx_read_object *intern;
+	long symbol;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &symbol) == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	
+	if (symbol == DmtxSymbolSquareAuto || symbol == DmtxSymbolSquareCount || 
+		symbol == DmtxSymbolRectAuto || symbol == DmtxSymbolRectCount || symbol == DmtxSymbolShapeAuto) {
+		intern->options.symbol = symbol;
+	} else {
+		PHP_DMTX_THROW_GENERIC_EXCEPTION("Unknown symbol shape");
+	}
+	
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::setShrink(int shrink)
+	Symbol shape */
+PHP_METHOD(dmtxread, setshrink)
+{
+	php_dmtx_read_object *intern;
+	long shrink;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &shrink) == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	intern->options.shrink = shrink;
+	
 	RETURN_TRUE;
 }
 /* }}} */
@@ -353,7 +411,7 @@ static zval *_php_dmtx_region_to_array(DmtxDecode *decode, DmtxRegion *region, i
 }
 /* }}} */
 
-/* {{{ proto array dmtxRead::getInfo([int scan_gap, int corrections, int type, int timeout_ms])
+/* {{{ proto array dmtxRead::getInfo([int scan_gap, int corrections, int type])
 	Fetches the information from the image */
 PHP_METHOD(dmtxread, getinfo)
 {
@@ -365,8 +423,8 @@ PHP_METHOD(dmtxread, getinfo)
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lbl", &scan_gap, &corrections, &type) == FAILURE) {
 		return;
-	}	
-	
+	}
+
 	if (scan_gap <= 0) {
 		PHP_DMTX_THROW_GENERIC_EXCEPTION("The scan gap needs to be larger than zero");
 	}
@@ -375,7 +433,7 @@ PHP_METHOD(dmtxread, getinfo)
     
 	/* init the return value as an array */
 	array_init(return_value);
-	
+
 	if (intern->options.start <= 0) {
 		start = 0;
 		MagickResetIterator(intern->magick_wand);
@@ -401,7 +459,7 @@ PHP_METHOD(dmtxread, getinfo)
 		DmtxImage *image;
 		DmtxDecode *decode;
 		zval *current_page;
-		
+
 		/* Honor the limit */
 		if (j >= limit) {
 			break;
@@ -410,21 +468,26 @@ PHP_METHOD(dmtxread, getinfo)
 		
 		/* Get image */
 		image = php_create_dmtx_image_from_wand(intern->magick_wand TSRMLS_CC);
-	
+
 		if (!image) {
 			continue;
 		}
 		
-		decode = dmtxDecodeCreate(image, 1);
+		decode = dmtxDecodeCreate(image, intern->options.shrink);
 		
 		if (!decode) {
 			efree(image->pxl);
 			dmtxImageDestroy(&image);
 			continue;
 		}
-
+		
 		dmtxDecodeSetProp(decode, DmtxPropScanGap, scan_gap);
-
+		
+		if (dmtxDecodeSetProp(decode, DmtxPropSymbolSize, intern->options.symbol) == DmtxFail) {
+			efree(image->pxl);
+			dmtxImageDestroy(&image);
+		}
+		
 		/* Current page is an array of regions */
 		MAKE_STD_ZVAL(current_page);
 		array_init(current_page);
@@ -433,7 +496,7 @@ PHP_METHOD(dmtxread, getinfo)
 		for (;;) {
 			DmtxRegion *region;
 			zval *region_array;
-			
+
 			/* Let's see how it goes */
 			if (intern->options.timeout_ms >= 0) {
             	timeout = dmtxTimeAdd(dmtxTimeNow(), intern->options.timeout_ms);
@@ -654,6 +717,7 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->options.timeout_ms = -1;
 	intern->options.start = -1;
 	intern->options.limit = -1;
+	intern->options.symbol = DmtxSymbolShapeAuto;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
@@ -709,6 +773,7 @@ PHP_MINIT_FUNCTION(dmtx)
 	php_dmtx_sc_entry = zend_register_internal_class(&ce TSRMLS_CC);
 
 	/* Register constants */
+	PHP_DMTX_REGISTER_CONST_LONG("SYMBOL_SHAPE_AUTO", DmtxSymbolShapeAuto);
 	PHP_DMTX_REGISTER_CONST_LONG("SYMBOL_SQUARE_AUTO", DmtxSymbolSquareAuto);
 	PHP_DMTX_REGISTER_CONST_LONG("SYMBOL_SQUARE_COUNT", DmtxSymbolSquareCount);
 	PHP_DMTX_REGISTER_CONST_LONG("SYMBOL_RECT_AUTO", DmtxSymbolRectAuto);
