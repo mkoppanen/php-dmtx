@@ -74,12 +74,25 @@ typedef struct _php_dmtx_scan_region {
 	zend_bool active;
 } php_dmtx_scan_region;
 
+/**
+ * Encoding schemes
+ */
+typedef enum {
+	PhpDmtxSchemeAscii,
+	PhpDmtxSchemeC40,
+	PhpDmtxSchemeText,
+	PhpDmtxSchemeX12,
+	PhpDmtxSchemeEdifact,
+	PhpDmtxSchemeBase256
+} PhpDmtxScheme;
+
 typedef struct _php_dmtx_read_opts {
 	long timeout_ms;
 	long start;
 	long limit;
 	long symbol;
 	long shrink;
+	int  scheme; // added
 } php_dmtx_read_opts;
 
 /* Structure for dmtx object. */
@@ -96,6 +109,7 @@ typedef struct _php_dmtx_write_object  {
 	char message[DMTXWRITE_BUFFER_SIZE];
 	int message_len;
 	MagickWand *magick_wand;
+	int  scheme; // added
 } php_dmtx_write_object;
 
 /* Method declarations, dmtx class is just 
@@ -110,12 +124,14 @@ PHP_METHOD(dmtxread, setlimit);
 PHP_METHOD(dmtxread, setshrink);
 PHP_METHOD(dmtxread, setsymbolshape);
 PHP_METHOD(dmtxread, setscanregion);
+PHP_METHOD(dmtxread, setscheme); // added
 
 PHP_METHOD(dmtxread, gettimeout);
 PHP_METHOD(dmtxread, getlimit);
 PHP_METHOD(dmtxread, getshrink);
 PHP_METHOD(dmtxread, getsymbolshape);
 PHP_METHOD(dmtxread, getscanregion);
+PHP_METHOD(dmtxread, getscheme); // added
 
 PHP_METHOD(dmtxread, getinfo);
 PHP_METHOD(dmtxread, unsetscanregion);
@@ -123,6 +139,8 @@ PHP_METHOD(dmtxread, unsetscanregion);
 /* dmtxWrite class */
 PHP_METHOD(dmtxwrite, __construct);
 PHP_METHOD(dmtxwrite, setmessage);
+PHP_METHOD(dmtxwrite, setscheme); // added
+PHP_METHOD(dmtxwrite, getscheme); // added
 PHP_METHOD(dmtxwrite, save);
 
 #define PHP_DMTX_NO_FILENAME_ERROR 1

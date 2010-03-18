@@ -118,6 +118,10 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_setlimit_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, limit)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(dmtxread_setscheme_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, scheme)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(dmtxread_getinfo_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, scan_gap)
 	ZEND_ARG_INFO(0, corrections)
@@ -141,19 +145,23 @@ static function_entry php_dmtx_read_class_methods[] =
 	PHP_ME(dmtxread, setsymbolshape, dmtxread_setsymbolshape_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setshrink, dmtxread_setshrink_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, setscanregion, dmtxread_setscanregion_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, setscheme, dmtxread_setscheme_args, ZEND_ACC_PUBLIC)
 	
 	PHP_ME(dmtxread, getinfo, dmtxread_getinfo_args, ZEND_ACC_PUBLIC)
-	
+
 	
 	PHP_ME(dmtxread, gettimeout, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getlimit, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getsymbolshape, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getshrink, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, getscanregion, dmtxread_empty_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxread, getscheme, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxread, unsetscanregion, dmtxread_empty_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
 
+ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_empty_args, 0, 0, 0)
+ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_construct_args, 0, 0, 0)
 	ZEND_ARG_INFO(0, message)
@@ -162,6 +170,10 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_setmessage_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, message)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_setscheme_args, 0, 0, 1)
+	ZEND_ARG_INFO(0, scheme)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
@@ -174,6 +186,8 @@ static function_entry php_dmtx_write_class_methods[] =
 {
 	PHP_ME(dmtxwrite, __construct, dmtxwrite_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
 	PHP_ME(dmtxwrite, setmessage, dmtxwrite_setmessage_args, ZEND_ACC_PUBLIC)
+	PHP_ME(dmtxwrite, setscheme, dmtxwrite_setscheme_args, ZEND_ACC_PUBLIC) // added
+	PHP_ME(dmtxwrite, getscheme, dmtxwrite_empty_args, ZEND_ACC_PUBLIC)
 	PHP_ME(dmtxwrite, save, dmtxwrite_save_args, ZEND_ACC_PUBLIC)
 	{ NULL, NULL, NULL }
 };
@@ -218,6 +232,7 @@ PHP_METHOD(dmtxread, __construct)
 	}
 
 	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	intern->options.scheme = PhpDmtxSchemeBase256; //added
 
 	if (filename && filename_len > 0) {
 		MagickSetResolution(intern->magick_wand, X_RESOLUTION, Y_RESOLUTION);
@@ -429,6 +444,46 @@ PHP_METHOD(dmtxread, setscanregion)
 }
 /* }}} */
 
+/* {{{ proto bool dmtxRead::setScheme([integer scheme])
+	Sets the encoding scheme on the object
+*/
+PHP_METHOD(dmtxread, setscheme)
+{
+ 	php_dmtx_read_object *intern;
+	long scheme;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &scheme) == FAILURE) {
+		return;
+	}
+
+	if (scheme < PhpDmtxSchemeAscii || scheme > PhpDmtxSchemeBase256) {
+		PHP_DMTX_THROW_GENERIC_EXCEPTION("Invalid encoding scheme assigned!");
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+
+	intern->options.scheme = scheme;
+
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxRead::getScheme()
+	Returns encoding scheme on the object
+*/
+PHP_METHOD(dmtxread, getscheme)
+{
+	php_dmtx_read_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_read_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	RETURN_LONG(intern->options.scheme);
+}
+/* }}} */
+
 /* {{{ proto bool dmtxRead::unsetScanRegion()
 	Unset scan region */
 PHP_METHOD(dmtxread, unsetscanregion)
@@ -620,6 +675,12 @@ PHP_METHOD(dmtxread, getinfo)
 		}
 		
 		dmtxDecodeSetProp(decode, DmtxPropScanGap, scan_gap);
+
+		/**
+		 * Added encoding options select
+		 * @author Mykhailo Stadnyk <mikhus@gmail.com>
+		 */
+		dmtxDecodeSetProp(decode, DmtxPropScheme, intern->options.scheme);
 		
 		if (intern->scan_region.active) {
 			
@@ -709,6 +770,7 @@ PHP_METHOD(dmtxwrite, __construct)
 	memset(intern->message, '\0', DMTXWRITE_BUFFER_SIZE);
 	strncpy(intern->message, message, message_len);
 	intern->message_len = message_len;
+	intern->scheme = PhpDmtxSchemeBase256; // added
 	return;
 }
 /* }}} */
@@ -736,6 +798,46 @@ PHP_METHOD(dmtxwrite, setmessage)
 	intern->message_len = message_len;
 
 	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxWrite::setScheme([integer scheme])
+	Sets the encoding scheme on the object
+*/
+PHP_METHOD(dmtxwrite, setscheme)
+{
+ 	php_dmtx_write_object *intern;
+	long scheme;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &scheme) == FAILURE) {
+		return;
+	}
+
+	if (scheme < PhpDmtxSchemeAscii || scheme > PhpDmtxSchemeBase256) {
+		PHP_DMTX_THROW_GENERIC_EXCEPTION("Invalid encoding scheme assigned!");
+	}
+
+	intern = (php_dmtx_write_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+
+	intern->scheme = scheme;
+
+	RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto bool dmtxWrite::getScheme()
+	Returns encoding scheme on the object
+*/
+PHP_METHOD(dmtxwrite, getscheme)
+{
+	php_dmtx_write_object *intern;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "") == FAILURE) {
+		return;
+	}
+
+	intern = (php_dmtx_write_object *)zend_object_store_get_object(getThis() TSRMLS_CC);
+	RETURN_LONG(intern->scheme);
 }
 /* }}} */
 
@@ -768,6 +870,11 @@ PHP_METHOD(dmtxwrite, save)
 	/* Pack as RGB */
 	dmtxEncodeSetProp(encode, DmtxPropPixelPacking, DmtxPack24bppRGB);
 	dmtxEncodeSetProp(encode, DmtxPropSizeRequest, symbol);
+
+	/**
+	 * Sets selected encoding scheme
+	 */
+	dmtxEncodeSetProp(encode, DmtxPropScheme, intern->scheme);
 	
 	if (type == PHP_DMTX_MOSAIC) {
 		status = dmtxEncodeDataMosaic(encode, intern->message_len, (unsigned char *)intern->message);
@@ -877,6 +984,7 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->options.limit = -1;
 	intern->options.symbol = DmtxSymbolShapeAuto;
 	intern->options.shrink = 1;
+	//intern->options.scheme = Dmtx
 	
 	intern->scan_region.x_min = 0;
 	intern->scan_region.x_max = 0;
@@ -949,6 +1057,17 @@ PHP_MINIT_FUNCTION(dmtx)
 	/* Different types */
 	PHP_DMTX_REGISTER_CONST_LONG("TYPE_MATRIX", PHP_DMTX_MATRIX);
 	PHP_DMTX_REGISTER_CONST_LONG("TYPE_MOSAIC", PHP_DMTX_MOSAIC);
+
+	/**
+	 * different schemes
+	 * @author Mykhailo Stadnyk <mikhus@gmail.com>
+	 */
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_ASCII", PhpDmtxSchemeAscii);
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_C40", PhpDmtxSchemeC40);
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_TEXT", PhpDmtxSchemeText);
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_X12", PhpDmtxSchemeX12);
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_EDITFACT", PhpDmtxSchemeEdifact);
+	PHP_DMTX_REGISTER_CONST_LONG("SCHEME_BASE256", PhpDmtxSchemeBase256);
 	
 	/*
 		Initialize the class (dmtx read)
