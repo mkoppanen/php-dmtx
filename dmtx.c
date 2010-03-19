@@ -984,7 +984,7 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->options.limit = -1;
 	intern->options.symbol = DmtxSymbolShapeAuto;
 	intern->options.shrink = 1;
-	//intern->options.scheme = Dmtx
+	intern->options.scheme = PhpDmtxSchemeBase256;
 	
 	intern->scan_region.x_min = 0;
 	intern->scan_region.x_max = 0;
@@ -1015,6 +1015,7 @@ static zend_object_value php_dmtx_write_object_new(zend_class_entry *class_type 
 
 	memset(intern->message, '\0', DMTXWRITE_BUFFER_SIZE);
 	intern->message_len = 0;
+	intern->scheme = PhpDmtxSchemeBase256;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
