@@ -24,11 +24,11 @@ array(1) {
       ["codewords"]=>
       int(5)
       ["rotation_angle"]=>
-      int(359)
+      int(0)
       ["matrix_width"]=>
-      int(12)
+      int(14)
       ["matrix_height"]=>
-      int(12)
+      int(14)
       ["data_regions_horizontal"]=>
       int(1)
       ["data_regions_vertical"]=>
@@ -38,20 +38,20 @@ array(1) {
       ["edges"]=>
       array(4) {
         ["left"]=>
-        string(4) "9x39"
+        string(4) "9x44"
         ["bottom"]=>
-        string(5) "16x10"
+        string(5) "17x10"
         ["top"]=>
-        string(5) "10x69"
+        string(5) "10x79"
         ["right"]=>
-        string(5) "69x10"
+        string(5) "79x10"
       }
       ["bounds"]=>
       array(2) {
         ["bound_min"]=>
         string(4) "9x10"
         ["bound_max"]=>
-        string(5) "69x69"
+        string(5) "79x79"
       }
     }
   }

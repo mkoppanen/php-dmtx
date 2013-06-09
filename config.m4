@@ -18,6 +18,7 @@ if test $PHP_DMTX != "no"; then
 	fi
 
 	AC_MSG_RESULT(found in $DMTX_PATH/include/dmtx.h)
+	
 	AC_MSG_CHECKING(ImageMagick MagickWand API configuration program)
 	
 	for i in $PHP_DMTX_IMAGEMAGICK_DIR /usr/local /usr;
@@ -38,20 +39,22 @@ if test $PHP_DMTX != "no"; then
 		AC_MSG_RESULT(found in $WAND_BINARY)
 	fi
 	
-	WAND_DIR="`$WAND_BINARY --prefix`"
+    WAND_DIR="`$WAND_BINARY --prefix`"
+	
+	DMTX_LIBS=`$WAND_BINARY --libs`
+    DMTX_INCS=`$WAND_BINARY --cflags`
 
-	if test ! -z $DMTX_OLD_IM; then
+    PHP_EVAL_LIBLINE($DMTX_LIBS, DMTX_SHARED_LIBADD)
+    PHP_EVAL_INCLINE($DMTX_INCS)
+
+    ORIG_LIBS="$LIBS"
+    LIBS="$DMTX_LIBS"
+
+    AC_CHECK_FUNC([MagickExportImagePixels],
+                  [],
+                  [AC_MSG_ERROR([not found])])
 	
-		PHP_ADD_LIBRARY_WITH_PATH(Magick, $WAND_DIR/lib, DMTX_SHARED_LIBADD)
-		PHP_ADD_LIBRARY_WITH_PATH(Wand, $WAND_DIR/lib, DMTX_SHARED_LIBADD)
-		PHP_ADD_INCLUDE($WAND_DIR/include)	
-	
-		AC_DEFINE(DMTX_IMAGEMAGICK_OLD,1,[ ])
-	else	
-		PHP_ADD_LIBRARY_WITH_PATH(MagickCore, $WAND_DIR/lib, DMTX_SHARED_LIBADD)
-		PHP_ADD_LIBRARY_WITH_PATH(MagickWand, $WAND_DIR/lib, DMTX_SHARED_LIBADD)
-		PHP_ADD_INCLUDE($WAND_DIR/include/ImageMagick)
-	fi
+	LIBS="$ORIG_LIBS"
 
 	AC_DEFINE(HAVE_DMTX_IMAGEMAGICK,1,[ ])
 	AC_DEFINE(HAVE_DMTX,1,[ ])
