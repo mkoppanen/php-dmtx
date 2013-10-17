@@ -47,7 +47,10 @@
 /* Include the dmtx header */
 #include <dmtx.h>
 
-#ifdef DMTX_IMAGEMAGICK_OLD
+/* Include magic wand header */
+#if defined (IM_MAGICKWAND_HEADER_STYLE_SEVEN)
+#  include <MagickWand/MagickWand.h>
+#elif defined (IM_MAGICKWAND_HEADER_STYLE_OLD)
 #  include <wand/magick-wand.h>
 #else
 #  include <wand/MagickWand.h>
