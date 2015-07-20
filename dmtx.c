@@ -135,7 +135,11 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxread_setscanregion_args, 0, 0, 4)
 	ZEND_ARG_INFO(0, y_max)
 ZEND_END_ARG_INFO()
 
+#if PHP_VERSION_ID < 50399
 static function_entry php_dmtx_read_class_methods[] =
+#else
+static zend_function_entry php_dmtx_read_class_methods[] =
+#endif
 {
 	PHP_ME(dmtxread, __construct, dmtxread_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
 	PHP_ME(dmtxread, loadfile, dmtxread_loadfile_args, ZEND_ACC_PUBLIC)
@@ -182,7 +186,11 @@ ZEND_BEGIN_ARG_INFO_EX(dmtxwrite_save_args, 0, 0, 1)
 	ZEND_ARG_INFO(0, type)
 ZEND_END_ARG_INFO()
 
+#if PHP_VERSION_ID < 50399
 static function_entry php_dmtx_write_class_methods[] =
+#else
+static zend_function_entry php_dmtx_write_class_methods[] =
+#endif
 {
 	PHP_ME(dmtxwrite, __construct, dmtxwrite_construct_args, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
 	PHP_ME(dmtxwrite, setmessage, dmtxwrite_setmessage_args, ZEND_ACC_PUBLIC)
@@ -192,7 +200,11 @@ static function_entry php_dmtx_write_class_methods[] =
 	{ NULL, NULL, NULL }
 };
 
+#if PHP_VERSION_ID < 50399
 static function_entry php_dmtx_class_methods[] =
+#else
+static zend_function_entry php_dmtx_class_methods[] =
+#endif
 {
 	{ NULL, NULL, NULL }
 };
@@ -960,7 +972,11 @@ static zend_object_value php_dmtx_object_new(zend_class_entry *class_type TSRMLS
 	memset(&intern->zo, 0, sizeof(php_dmtx_read_object));
 	
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
+#if PHP_VERSION_ID < 50399
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
+#else
+	object_properties_init((zend_object*) &(intern->zo.properties), class_type);
+#endif
 	
 	retval.handle = zend_objects_store_put(intern, NULL, (zend_objects_free_object_storage_t) php_dmtx_object_free_storage, NULL TSRMLS_CC);
 	retval.handlers = (zend_object_handlers *) &php_dmtx_object_handlers;
@@ -995,7 +1011,11 @@ static zend_object_value php_dmtx_read_object_new(zend_class_entry *class_type T
 	intern->scan_region.active = 0;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
+#if PHP_VERSION_ID < 50399
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
+#else
+	object_properties_init((zend_object*) &(intern->zo.properties), class_type);
+#endif
 	
 	retval.handle = zend_objects_store_put(intern, NULL, (zend_objects_free_object_storage_t) php_dmtx_read_object_free_storage, NULL TSRMLS_CC);
 	retval.handlers = (zend_object_handlers *) &php_dmtx_read_object_handlers;
@@ -1018,8 +1038,11 @@ static zend_object_value php_dmtx_write_object_new(zend_class_entry *class_type 
 	intern->scheme = PhpDmtxSchemeBase256;
 
 	zend_object_std_init(&intern->zo, class_type TSRMLS_CC);
+#if PHP_VERSION_ID < 50399
 	zend_hash_copy(intern->zo.properties, &class_type->default_properties, (copy_ctor_func_t) zval_add_ref,(void *) &tmp, sizeof(zval *));
-	
+#else
+	object_properties_init((zend_object*) &(intern->zo.properties), class_type);
+#endif
 	retval.handle = zend_objects_store_put(intern, NULL, (zend_objects_free_object_storage_t) php_dmtx_write_object_free_storage, NULL TSRMLS_CC);
 	retval.handlers = (zend_object_handlers *) &php_dmtx_write_object_handlers;
 	return retval;
@@ -1101,7 +1124,11 @@ PHP_MINFO_FUNCTION(dmtx)
 	php_info_print_table_end();
 }
 
+#if PHP_VERSION_ID < 50399
 static function_entry php_dmtx_functions[] =
+#else
+static zend_function_entry php_dmtx_functions[] =
+#endif
 {
 	{ NULL, NULL, NULL }
 };
